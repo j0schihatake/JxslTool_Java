@@ -1,4 +1,4 @@
-package org.j0schi.xslt;
+package org.j0schi.services;
 
 import javax.xml.transform.*;
 import javax.xml.transform.stream.StreamResult;

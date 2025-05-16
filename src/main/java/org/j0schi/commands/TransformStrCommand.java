@@ -1,29 +1,46 @@
 package org.j0schi.commands;
 
-import org.j0schi.xslt.XsltService;
+import org.j0schi.services.XsltService;
 import picocli.CommandLine;
-import picocli.CommandLine.Command;
-import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Option;
 import java.nio.file.Files;
 import java.nio.file.Paths;
+import java.util.Map;
 
-@Command(name = "transform-str", description = "Transform XML string using XSLT")
-public class TransformStrCommand implements Runnable {
+@CommandLine.Command(name = "transform-str", description = "Transform XML string")
+public class TransformStrCommand extends BaseCommand {
 
-    @Parameters(index = "0", description = "Path to XSLT file")
+    @Option(names = {"-x", "--xslt"}, description = "XSLT file path")
     private String xsltPath;
 
-    @Parameters(index = "1", description = "XML text", arity = "1..*")
+    @Option(names = {"-t", "--text"}, description = "XML text")
     private String xmlText;
 
     @Override
-    public void run() {
+    public Integer call() {
+        Map<String, String> config = loadConfig("transform-str");
+
+        if (xsltPath == null) xsltPath = config.get("xslt");
+        if (xmlText == null) xmlText = config.get("text");
+
+        if (xsltPath == null || xmlText == null) {
+            System.err.println("Required parameters: --xslt and --text");
+            return 1;
+        }
+
         try {
             String xsltContent = Files.readString(Paths.get(xsltPath));
             String result = new XsltService().transformFromString(xmlText, xsltContent);
             System.out.println(result);
+
+            saveConfig("transform-str", Map.of(
+                    "xslt", xsltPath,
+                    "text", xmlText
+            ));
+            return 0;
         } catch (Exception e) {
             System.err.println("Error: " + e.getMessage());
+            return 2;
         }
     }
 }
