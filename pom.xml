@@ -39,7 +39,7 @@
                 <configuration>
                     <archive>
                         <manifest>
-                            <mainClass>com.example.jox.JoxApp</mainClass>
+                            <mainClass>org.j0schi.Main</mainClass>
                         </manifest>
                     </archive>
                     <descriptorRefs>
