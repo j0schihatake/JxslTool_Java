@@ -14,7 +14,8 @@ public class Main implements Callable<Integer> {
                 .addSubcommand(new TransformCommand())
                 .addSubcommand(new TransformStrCommand())
                 .addSubcommand(new FindXsltCommand())
-                .addSubcommand(new UpdateXsltCommand()) // Добавляем новую команду
+                .addSubcommand(new UnscriptCommand())
+                .addSubcommand(new UpdateXsltCommand())
                 .execute(args);
         System.exit(exitCode);
     }
