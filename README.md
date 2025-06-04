@@ -3,37 +3,17 @@
 
 Установка в систему
 
-Поместите все файлы в папку, например C:\apps\jox\:
+Поместите все файлы в папку, например C:\apps\j0schi\:
 
-jox.jar (после сборки)
-
-jox.bat
-
-picocli-4.7.4.jar
+j0schi.jar (после сборки)
+j0schi.bat
 
 Добавьте путь в переменную PATH:
 
 bat
-setx PATH "%PATH%;C:\apps\jox"
+setx PATH "%PATH%;C:\apps\j0schi"
 Шаг 4: Проверка работы
 
 cmd
-jox --version
-jox transform --help
-jox find-xslt -d C:\xslt -i input.xml 
-
-Примеры использования после настройки
-   Первое использование (сохранит параметры):
-
-cmd
-jox transform -x template.xslt -i data.xml
-jox find-xslt -d C:\templates -i input.xml
-Последующие вызовы (без параметров):
-
-cmd
-jox transform -i new_data.xml  # использует сохраненный xsltPath
-jox find-xslt                  # использует сохраненные dir и input
-Переопределение параметров:
-
-cmd
-jox find-xslt -d C:\new_templates  # обновит только директорию
+j0schi --version
+j0schi transform --help
