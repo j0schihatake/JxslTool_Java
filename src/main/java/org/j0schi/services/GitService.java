@@ -1,15 +1,21 @@
 package org.j0schi.services;
 
 import org.eclipse.jgit.api.Git;
+import org.eclipse.jgit.api.PullCommand;
 import org.eclipse.jgit.api.PullResult;
+import org.eclipse.jgit.api.PushCommand;
 import org.eclipse.jgit.api.errors.GitAPIException;
+import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.transport.PushResult;
+import org.eclipse.jgit.transport.RemoteRefUpdate;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.Collection;
 
 public class GitService {
 
@@ -17,8 +23,24 @@ public class GitService {
         try (Git git = openRepository(repoPath)) {
             if (git == null) return false;
 
+            // Проверяем наличие удаленных репозиториев
+            if (!hasRemotes(git)) {
+                System.out.println("WARNING: Skipping pull - no remotes configured for repository: " + repoPath);
+                return true;
+            }
+
             System.out.printf("Pulling changes from repository: %s%n", repoPath);
-            PullResult result = git.pull().setRebase(true).call();
+
+            // Пытаемся сделать pull с upstream, если он есть
+            String upstreamBranch = getUpstreamBranch(git);
+            PullCommand pullCommand = git.pull();
+
+            if (upstreamBranch != null) {
+                pullCommand.setRemoteBranchName(upstreamBranch);
+                System.out.println("Using upstream branch: " + upstreamBranch);
+            }
+
+            PullResult result = pullCommand.setRebase(true).call();
             System.out.println("Pull result: " + result);
             return result.isSuccessful();
         } catch (GitAPIException | IOException e) {
@@ -41,10 +63,50 @@ public class GitService {
             git.add().addFilepattern(".").call();
             git.commit().setMessage(commitMessage).call();
 
+            // Проверяем наличие удаленных репозиториев
+            if (!hasRemotes(git)) {
+                System.out.println("WARNING: Skipping push - no remotes configured for repository: " + repoPath);
+                return true;
+            }
+
             System.out.println("Pushing changes...");
-            git.push().call();
+            PushCommand pushCommand = git.push();
+
+            // Если есть upstream, пушим в него
+            String upstreamBranch = getUpstreamBranch(git);
+            if (upstreamBranch != null) {
+                pushCommand.setRemote("upstream");
+                System.out.println("Pushing to upstream branch");
+            }
+
+            pushCommand.call();
             return true;
         } catch (GitAPIException | IOException e) {
+            handleGitError(repoPath, e);
+            return false;
+        }
+    }
+
+    public boolean syncWithRemote(String repoPath) {
+        try (Git git = openRepository(repoPath)) {
+            if (git == null) return false;
+
+            // Проверяем наличие удаленных репозиториев
+            if (!hasRemotes(git)) {
+                System.out.println("WARNING: Skipping sync - no remotes configured for repository: " + repoPath);
+                return true;
+            }
+
+            System.out.printf("Synchronizing repository: %s%n", repoPath);
+
+            // 1. Pull последних изменений
+            if (!pullRepository(repoPath)) {
+                return false;
+            }
+
+            // 2. Push изменений
+            return commitAndPush(repoPath, "Automatic synchronization");
+        } catch (Exception e) {
             handleGitError(repoPath, e);
             return false;
         }
@@ -61,11 +123,24 @@ public class GitService {
                 .setGitDir(gitDir.toFile())
                 .build();
 
-        if (repository.getRemoteNames().isEmpty()) {
-            System.err.println("WARNING: No remote origin configured for repository: " + repoPath);
-        }
-
         return new Git(repository);
+    }
+
+    private boolean hasRemotes(Git git) {
+        return git != null &&
+                git.getRepository() != null &&
+                !git.getRepository().getRemoteNames().isEmpty();
+    }
+
+    private String getUpstreamBranch(Git git) throws IOException {
+        if (git == null) return null;
+
+        String currentBranch = git.getRepository().getBranch();
+        if (currentBranch == null) return null;
+
+        // Получаем upstream для текущей ветки
+        Ref upstreamRef = git.getRepository().findRef(currentBranch + "@{upstream}");
+        return upstreamRef != null ? upstreamRef.getName() : null;
     }
 
     private void handleGitError(String repoPath, Exception e) {
@@ -74,6 +149,62 @@ public class GitService {
 
         if (e.getCause() != null) {
             System.err.println("Cause: " + e.getCause().getMessage());
+        }
+
+        // Логируем stack trace для отладки
+        e.printStackTrace();
+    }
+
+    public boolean isRepository(String repoPath) {
+        return Files.exists(Paths.get(repoPath, ".git"));
+    }
+
+    public String getUpstreamBranch(String repoPath) throws IOException {
+        try (Git git = openRepository(repoPath)) {
+            if (git == null) return null;
+
+            String currentBranch = git.getRepository().getBranch();
+            if (currentBranch == null) return null;
+
+            Ref upstreamRef = git.getRepository().findRef(currentBranch + "@{upstream}");
+            return upstreamRef != null ? upstreamRef.getName() : null;
+        }
+    }
+
+    public boolean hasRemote(String repoPath, String remoteName) throws IOException {
+        try (Git git = openRepository(repoPath)) {
+            return git != null && git.getRepository().getRemoteNames().contains(remoteName);
+        }
+    }
+
+    public boolean pushToRemote(String repoPath, String remoteName) throws GitAPIException, IOException {
+        try (Git git = openRepository(repoPath)) {
+            if (git == null) return false;
+
+            PushCommand pushCommand = git.push().setRemote(remoteName);
+            Iterable<PushResult> results = pushCommand.call();
+
+            boolean success = true;
+            for (PushResult result : results) {
+                System.out.println("Push result to " + remoteName + ": " + result.getMessages());
+                success &= result.getRemoteUpdates().stream()
+                        .allMatch(update -> update.getStatus() == RemoteRefUpdate.Status.OK);
+            }
+            return success;
+        }
+    }
+
+    public boolean pullFromRemote(String repoPath, String remoteName) throws GitAPIException, IOException {
+        try (Git git = openRepository(repoPath)) {
+            if (git == null) return false;
+
+            PullResult result = git.pull()
+                    .setRemote(remoteName)
+                    .setRebase(true)
+                    .call();
+
+            System.out.println("Pull result from " + remoteName + ": " + result);
+            return result.isSuccessful();
         }
     }
 }

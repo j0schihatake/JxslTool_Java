@@ -46,38 +46,55 @@ public class CodUpdateCommand extends BaseCommand {
     @Override
     public Integer call() {
         try {
-            // Загрузка сохраненных настроек
             Map<String, String> savedConfig = loadConfig("codUpdate");
             applyConfig(savedConfig);
-
-            // Validate all paths before execution
             validatePaths();
 
             System.out.println("Starting COD update process...");
 
-            // 1. Pull latest changes from AF repository
-            pullRepository("AF repository", targetGitPath);
+            // 1. Синхронизация AF репозитория
+            if (!syncWithRemote("AF repository", targetGitPath)) {
+                throw new Exception("Failed to sync AF repository");
+            }
 
-            // 2. Copy files from AF to COD
+            // 2. Копирование файлов
             copyFilesWithReplace("AF files", targetPath, "COD directory", codPath);
 
-            // 3. Update migration file if specified
+            // 3. Обновление миграционного файла
             if (migrationFilePath != null) {
                 updateMigrationFile();
             }
 
-            // 4. Commit and push changes to COD repository
-            commitAndPush("COD repository", codGitPath, "Перенос последних изменений xslt из AF.");
+            // 4. Операции перед коммитом в COD
+            Path codRepo = Paths.get(codGitPath);
+            try (Git git = Git.open(codRepo.toFile())) {
+                // Push в upstream (если есть)
+                if (git.getRepository().getRemoteNames().contains("upstream")) {
+                    if (!pushToUpstream(codGitPath)) {
+                        System.err.println("WARNING: Failed to push to upstream");
+                    }
+                }
 
-            // Save successful configuration
+                // Pull из origin (если есть)
+                if (git.getRepository().getRemoteNames().contains("origin")) {
+                    if (!pullFromOrigin(codGitPath)) {
+                        System.err.println("WARNING: Failed to pull from origin");
+                    }
+                }
+            }
+
+            // 5. Фиксация изменений в COD
+            if (!commitAndPush("COD repository", codGitPath, "Automatic update from AF")) {
+                throw new Exception("Failed to commit COD changes");
+            }
+
+            // 6. Сохранение конфигурации
             saveConfig("codUpdate", createConfigMap());
 
             System.out.println("COD update completed successfully!");
             return 0;
-
         } catch (Exception e) {
             System.err.println("ERROR: " + e.getMessage());
-            System.err.println("COD update failed!");
             return 1;
         }
     }

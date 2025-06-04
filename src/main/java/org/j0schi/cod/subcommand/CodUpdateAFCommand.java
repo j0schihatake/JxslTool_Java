@@ -29,43 +29,41 @@ public class CodUpdateAFCommand extends BaseCommand {
     @Override
     public Integer call() {
         try {
-            // Загрузка сохраненных настроек
             Map<String, String> savedConfig = loadConfig("codUpdateAF");
             applyConfig(savedConfig);
-
-            // Validate paths
             validatePaths();
 
             System.out.println("Starting AF update process...");
 
-            // 1. Pull latest changes from COD Git repository
+            // 1. Синхронизация COD репозитория (только pull)
             if (codPathGit != null) {
-                pullRepository("COD repository", codPathGit);
+                if (!pullRepository("COD repository", codPathGit)) {
+                    System.err.println("WARNING: Failed to sync COD repository");
+                }
             }
 
-            // 2. Copy files from codPath to targetPath
+            // 2. Копирование файлов
             if (codPath != null && targetPath != null) {
                 copyFilesWithReplace("COD directory", codPath, "AF directory", targetPath);
-                System.out.println("Files copied successfully from COD to AF");
             }
 
-            // 3. Execute migration (empty for now)
+            // 3. Обновление миграций
             updateMigration();
 
-            // 4. Commit changes to target repository
+            // 4. Только синхронизация AF (без коммита)
             if (targetGitPath != null) {
-                commitAndPush("AF repository", targetGitPath, "Перенос последних изменений xslt из COD.");
+                if (!pullRepository("AF repository", targetGitPath)) {
+                    System.err.println("WARNING: Failed to sync AF repository");
+                }
             }
 
-            // Save successful configuration
+            // 5. Сохранение конфигурации
             saveConfig("codUpdateAF", createConfigMap());
 
-            System.out.println("AF update completed successfully!");
+            System.out.println("AF update completed! Please review and commit changes manually.");
             return 0;
         } catch (Exception e) {
             System.err.println("ERROR: " + e.getMessage());
-            e.printStackTrace();
-            System.err.println("AF update failed!");
             return 1;
         }
     }

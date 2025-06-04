@@ -1,5 +1,6 @@
 package org.j0schi.commands;
 
+import org.eclipse.jgit.api.Git;
 import org.j0schi.services.GitService;
 
 import java.io.*;
@@ -151,6 +152,8 @@ public abstract class BaseCommand implements Callable<Integer> {
 
     public abstract Integer call() throws Exception;
 
+    //  ----------------------------    Работа с git:
+
     protected boolean pullRepository(String repoName, String repoPath) {
         System.out.printf("Pulling latest changes from %s (%s)...%n", repoName, repoPath);
         return gitService.pullRepository(repoPath);
@@ -159,5 +162,53 @@ public abstract class BaseCommand implements Callable<Integer> {
     protected boolean commitAndPush(String repoName, String repoPath, String commitMessage) {
         System.out.printf("Committing changes to %s (%s)...%n", repoName, repoPath);
         return gitService.commitAndPush(repoPath, commitMessage);
+    }
+
+    protected boolean syncWithRemote(String repoName, String repoPath) {
+        System.out.printf("Synchronizing %s (%s) with remote...%n", repoName, repoPath);
+        return gitService.syncWithRemote(repoPath);
+    }
+
+    protected boolean pushToUpstream(String repoPath) {
+        try {
+            // Используем GitService для работы с репозиторием
+            if (!gitService.isRepository(repoPath)) {
+                System.err.println("ERROR: Not a Git repository: " + repoPath);
+                return false;
+            }
+
+            // Проверяем наличие upstream
+            String upstreamBranch = gitService.getUpstreamBranch(repoPath);
+            if (upstreamBranch == null) {
+                System.out.println("No upstream configured. Skipping push.");
+                return true;
+            }
+
+            System.out.println("Pushing to upstream...");
+            return gitService.pushToRemote(repoPath, "upstream");
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    protected boolean pullFromOrigin(String repoPath) {
+        try {
+            // Используем GitService для работы с репозиторием
+            if (!gitService.isRepository(repoPath)) {
+                System.err.println("ERROR: Not a Git repository: " + repoPath);
+                return false;
+            }
+
+            // Проверяем наличие origin
+            if (!gitService.hasRemote(repoPath, "origin")) {
+                System.out.println("No origin configured. Skipping pull.");
+                return true;
+            }
+
+            System.out.println("Pulling from origin...");
+            return gitService.pullFromRemote(repoPath, "origin");
+        } catch (Exception e) {
+            return false;
+        }
     }
 }
