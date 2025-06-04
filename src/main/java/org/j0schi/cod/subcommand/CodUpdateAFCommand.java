@@ -40,7 +40,7 @@ public class CodUpdateAFCommand extends BaseCommand {
 
             // 1. Pull latest changes from COD Git repository
             if (codPathGit != null) {
-                pullLatestChanges("COD repository", codPathGit);
+                pullRepository("COD repository", codPathGit);
             }
 
             // 2. Copy files from codPath to targetPath
@@ -54,7 +54,7 @@ public class CodUpdateAFCommand extends BaseCommand {
 
             // 4. Commit changes to target repository
             if (targetGitPath != null) {
-                commitChanges(targetGitPath, "Перенос последних изменений xslt из COD.");
+                commitAndPush("AF repository", targetGitPath, "Перенос последних изменений xslt из COD.");
             }
 
             // Save successful configuration
@@ -96,8 +96,12 @@ public class CodUpdateAFCommand extends BaseCommand {
     private void pullLatestChanges(String repoName, String repoPath) throws GitAPIException, IOException {
         System.out.printf("Pulling latest changes from %s (%s)...%n", repoName, repoPath);
         try (Git git = Git.open(Paths.get(repoPath).toFile())) {
-            PullResult pullResult = git.pull().setRebase(true).call();
-            System.out.println("Pull result: " + pullResult);
+            try {
+                PullResult pullResult = git.pull().setRebase(true).call();
+                System.out.println("Pull result: " + pullResult);
+            }catch(Exception e){
+                System.out.println("Pull exception: " + e.getMessage());
+            }
         }
     }
 

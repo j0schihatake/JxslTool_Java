@@ -25,7 +25,7 @@ public class Main implements Callable<Integer> {
                 .addSubcommand(new Base64Command())
                 .addSubcommand(new UpdateXsltCommand())
                 .addSubcommand(new CopyAndReplaceCommand())
-                .addSubcommand(new CodCommand()) // Добавляем новую команду COD
+                .addSubcommand(new CodCommand())
                 .execute(args);
         System.exit(exitCode);
     }

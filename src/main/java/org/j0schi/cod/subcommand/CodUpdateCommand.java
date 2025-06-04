@@ -56,7 +56,7 @@ public class CodUpdateCommand extends BaseCommand {
             System.out.println("Starting COD update process...");
 
             // 1. Pull latest changes from AF repository
-            pullLatestChanges("AF repository", targetGitPath);
+            pullRepository("AF repository", targetGitPath);
 
             // 2. Copy files from AF to COD
             copyFilesWithReplace("AF files", targetPath, "COD directory", codPath);
@@ -67,7 +67,7 @@ public class CodUpdateCommand extends BaseCommand {
             }
 
             // 4. Commit and push changes to COD repository
-            commitAndPushChanges();
+            commitAndPush("COD repository", codGitPath, "Перенос последних изменений xslt из AF.");
 
             // Save successful configuration
             saveConfig("codUpdate", createConfigMap());
@@ -77,7 +77,6 @@ public class CodUpdateCommand extends BaseCommand {
 
         } catch (Exception e) {
             System.err.println("ERROR: " + e.getMessage());
-            e.printStackTrace();
             System.err.println("COD update failed!");
             return 1;
         }

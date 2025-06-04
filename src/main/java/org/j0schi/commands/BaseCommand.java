@@ -1,14 +1,19 @@
 package org.j0schi.commands;
 
+import org.j0schi.services.GitService;
+
 import java.io.*;
 import java.nio.file.*;
 import java.util.*;
+import java.util.concurrent.Callable;
 import java.util.prefs.Preferences;
 
-public abstract class BaseCommand {
+public abstract class BaseCommand implements Callable<Integer> {
 
     protected static final String MIGRATION_FILE_PATTERN =
             "<changeSet id=\"%s_modify_af_xslt\" author=\"Renue\">";
+
+    protected final GitService gitService = new GitService(); // Добавляем сервис
 
     private static final Preferences PREFS = Preferences.userNodeForPackage(BaseCommand.class);
     private static final Path CONFIG_FILE = Paths.get(System.getProperty("user.home"), ".j0schi", "config.properties");
@@ -144,5 +149,15 @@ public abstract class BaseCommand {
         });
     }
 
-    public abstract Integer call();
+    public abstract Integer call() throws Exception;
+
+    protected boolean pullRepository(String repoName, String repoPath) {
+        System.out.printf("Pulling latest changes from %s (%s)...%n", repoName, repoPath);
+        return gitService.pullRepository(repoPath);
+    }
+
+    protected boolean commitAndPush(String repoName, String repoPath, String commitMessage) {
+        System.out.printf("Committing changes to %s (%s)...%n", repoName, repoPath);
+        return gitService.commitAndPush(repoPath, commitMessage);
+    }
 }
