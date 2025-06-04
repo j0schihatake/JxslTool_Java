@@ -5,7 +5,7 @@ import java.nio.file.*;
 import java.util.*;
 
 public class ConfigService {
-    private static final String CONFIG_FILE = ".jox-config.properties";
+    private static final String CONFIG_FILE = ".j0schi-config.properties";
     private final Properties props = new Properties();
 
     public ConfigService() {
@@ -44,7 +44,7 @@ public class ConfigService {
 
     private void saveConfig() {
         try (OutputStream output = Files.newOutputStream(Paths.get(CONFIG_FILE))) {
-            props.store(output, "JOX Configuration");
+            props.store(output, "JOschi Configuration");
         } catch (IOException e) {
             System.err.println("Error saving config: " + e.getMessage());
         }
