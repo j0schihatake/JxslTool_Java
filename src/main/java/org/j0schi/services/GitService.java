@@ -8,16 +8,23 @@ import org.eclipse.jgit.api.errors.GitAPIException;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
 import org.eclipse.jgit.storage.file.FileRepositoryBuilder;
+import org.eclipse.jgit.transport.CredentialsProvider;
 import org.eclipse.jgit.transport.PushResult;
 import org.eclipse.jgit.transport.RemoteRefUpdate;
+import org.eclipse.jgit.transport.UsernamePasswordCredentialsProvider;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.Collection;
 
 public class GitService {
+
+    private String username = "vdonskoy";
+
+    private String password = "Q-5x+Ies";
+
+    private final CredentialsProvider credentialsProvider = new UsernamePasswordCredentialsProvider(username, password);
 
     public boolean pullRepository(String repoPath) {
         try (Git git = openRepository(repoPath)) {
@@ -33,7 +40,11 @@ public class GitService {
 
             // Пытаемся сделать pull с upstream, если он есть
             String upstreamBranch = getUpstreamBranch(git);
+
             PullCommand pullCommand = git.pull();
+            if (credentialsProvider != null) {
+                pullCommand.setCredentialsProvider(credentialsProvider);
+            }
 
             if (upstreamBranch != null) {
                 pullCommand.setRemoteBranchName(upstreamBranch);
@@ -71,6 +82,9 @@ public class GitService {
 
             System.out.println("Pushing changes...");
             PushCommand pushCommand = git.push();
+            if (credentialsProvider != null) {
+                pushCommand.setCredentialsProvider(credentialsProvider);
+            }
 
             // Если есть upstream, пушим в него
             String upstreamBranch = getUpstreamBranch(git);
@@ -205,6 +219,42 @@ public class GitService {
 
             System.out.println("Pull result from " + remoteName + ": " + result);
             return result.isSuccessful();
+        }
+    }
+
+    public boolean hasChanges(String repoPath) {
+        try (Git git = openRepository(repoPath)) {
+            if (git == null) return false;
+            return !git.status().call().isClean();
+        } catch (Exception e) {
+            handleGitError(repoPath, e);
+            return false;
+        }
+    }
+
+    public boolean commit(String repoPath, String commitMessage) {
+        try (Git git = openRepository(repoPath)) {
+            if (git == null) return false;
+            if (git.status().call().isClean()) {
+                System.out.println("No changes to commit in: " + repoPath);
+                return true;
+            }
+
+            git.add().addFilepattern(".").call();
+            git.commit().setMessage(commitMessage).call();
+            return true;
+        } catch (Exception e) {
+            handleGitError(repoPath, e);
+            return false;
+        }
+    }
+
+    public boolean hasRemotes(String repoPath) {
+        try (Git git = openRepository(repoPath)) {
+            return git != null && !git.getRepository().getRemoteNames().isEmpty();
+        } catch (Exception e) {
+            handleGitError(repoPath, e);
+            return false;
         }
     }
 }

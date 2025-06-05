@@ -5,6 +5,8 @@ import org.eclipse.jgit.api.PullResult;
 import org.eclipse.jgit.api.Status;
 import org.eclipse.jgit.api.errors.GitAPIException;
 import org.j0schi.commands.BaseCommand;
+import org.j0schi.services.GitService;
+import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import java.io.IOException;
@@ -16,38 +18,42 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Pattern;
 import java.util.regex.Matcher;
+import java.util.stream.Stream;
 
 @Command(name = "update", description = "Update COD files from AF")
 public class CodUpdateCommand extends BaseCommand {
 
-    @Option(names = {"--target-git-path"},
-            description = "Path to AF Git repository (where to pull changes from)",
-            required = true)
+    @Option(names = "--target-git-path", required = true,
+            description = "Path to AF Git repository")
     private String targetGitPath;
 
-    @Option(names = {"--target-path"},
-            description = "Path to AF files directory (source for copying)",
-            required = true)
+    @Option(names = "--target-path", required = true,
+            description = "Path to AF files directory")
     private String targetPath;
 
-    @Option(names = {"--cod-git-path"},
-            description = "Path to COD Git repository (where to commit changes)",
-            required = true)
+    @Option(names = "--cod-git-path", required = true,
+            description = "Path to COD Git repository")
     private String codGitPath;
 
-    @Option(names = {"--cod-path"},
-            description = "Path to COD files directory (destination for copying)",
-            required = true)
+    @Option(names = "--cod-path", required = true,
+            description = "Path to COD files directory")
     private String codPath;
 
-    @Option(names = {"--migration-file"},
-            description = "Path to migration file to update")
+    // Опциональные параметры
+    @Option(names = "--migration-file",
+            description = "Path to migration file")
     private String migrationFilePath;
 
-    @Option(names = {"--no-push"},
-            description = "Skip pushing changes to remote repository",
-            defaultValue = "false")
+    @Option(names = "--no-push", defaultValue = "false",
+            description = "Skip pushing changes")
     private boolean noPush;
+
+    @Option(names = {"--only-files"},
+            defaultValue = "false",
+            description = "Copy only files (no directories)")
+    private boolean onlyFiles;
+
+    private final GitService gitService = new GitService();
 
     @Override
     public Integer call() {
@@ -59,7 +65,7 @@ public class CodUpdateCommand extends BaseCommand {
             System.out.println("Starting COD update process...");
 
             // 1. Синхронизация AF репозитория
-            if (!syncWithRemote("AF repository", targetGitPath)) {
+            if (!gitService.pullRepository(targetGitPath)) {
                 throw new Exception("Failed to sync AF repository");
             }
 
@@ -72,7 +78,7 @@ public class CodUpdateCommand extends BaseCommand {
             }
 
             // 4. Проверяем есть ли изменения
-            boolean hasChanges = checkForChanges(codGitPath);
+            boolean hasChanges = gitService.hasChanges(codGitPath);
 
             if (!hasChanges) {
                 System.out.println("No changes detected, skipping commit and push");
@@ -80,31 +86,25 @@ public class CodUpdateCommand extends BaseCommand {
             }
 
             // 5. Операции перед коммитом в COD
-            Path codRepo = Paths.get(codGitPath);
-            try (Git git = Git.open(codRepo.toFile())) {
-                // Pull из origin (если есть)
-                if (git.getRepository().getRemoteNames().contains("origin")) {
-                    if (!pullFromOrigin(codGitPath)) {
-                        System.err.println("WARNING: Failed to pull from origin");
-                    }
+            if (gitService.hasRemotes(codGitPath)) {
+                if (!gitService.pullRepository(codGitPath)) {
+                    System.err.println("WARNING: Failed to pull from origin");
                 }
             }
 
             // 6. Фиксация изменений в COD
-            if (!commitChanges("COD repository", codGitPath, "Automatic update from AF")) {
-                throw new Exception("Failed to commit COD changes");
-            }
-
-            // 7. Push изменений (если не указан --no-push)
             if (!noPush) {
-                if (!pushChanges(codGitPath)) {
-                    throw new Exception("Failed to push COD changes");
+                if (!gitService.commitAndPush(codGitPath, "Automatic update from AF")) {
+                    throw new Exception("Failed to commit and push COD changes");
                 }
             } else {
+                if (!gitService.commit(codGitPath, "Automatic update from AF")) {
+                    throw new Exception("Failed to commit COD changes");
+                }
                 System.out.println("Skipping push to remote (--no-push flag set)");
             }
 
-            // 8. Сохранение конфигурации
+            // 7. Сохранение конфигурации
             saveConfig("codUpdate", createConfigMap());
 
             System.out.println("COD update completed successfully!");
@@ -196,8 +196,30 @@ public class CodUpdateCommand extends BaseCommand {
             Files.createDirectories(targetDir);
         }
 
-        copyDirectory(sourceDir, targetDir);
+        if (onlyFiles) {
+            copyOnlyFiles(sourceDir, targetDir);
+        } else {
+            copyDirectory(sourceDir, targetDir);
+        }
         System.out.println("All files copied successfully");
+    }
+
+    private void copyOnlyFiles(Path sourceDir, Path targetDir) throws IOException {
+        System.out.println("Copying only files (ignoring subdirectories)");
+
+        try (Stream<Path> stream = Files.list(sourceDir)) {
+            stream.filter(Files::isRegularFile)
+                    .forEach(source -> {
+                        try {
+                            Path target = targetDir.resolve(source.getFileName());
+                            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+                            System.out.println("Copied file: " + source.getFileName());
+                        } catch (IOException e) {
+                            System.err.println("Failed to copy file: " + source.getFileName());
+                            e.printStackTrace();
+                        }
+                    });
+        }
     }
 
     private void updateMigrationFile() throws IOException {
