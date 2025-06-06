@@ -1,8 +1,7 @@
 package org.j0schi.cod.subcommand;
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.PullResult;
-import org.eclipse.jgit.api.errors.GitAPIException;
+
 import org.j0schi.commands.BaseCommand;
+import org.j0schi.services.GitService;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
@@ -10,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.*;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.stream.Stream;
 
 @Command(name = "updateAF", description = "Update AF files from COD")
 public class CodUpdateAFCommand extends BaseCommand {
@@ -26,6 +26,19 @@ public class CodUpdateAFCommand extends BaseCommand {
     @Option(names = {"-cp", "--codPath"}, description = "COD files directory path")
     private String codPath;
 
+    // Новые опции
+    @Option(names = {"--no-push"},
+            description = "Skip pushing changes to remote repository",
+            defaultValue = "false")
+    private boolean noPush;
+
+    @Option(names = {"--only-files", "--files-only", "-f"},
+            description = "Copy only files (ignore subdirectories)",
+            defaultValue = "false")
+    private boolean onlyFiles;
+
+    private final GitService gitService = new GitService();
+
     @Override
     public Integer call() {
         try {
@@ -34,10 +47,12 @@ public class CodUpdateAFCommand extends BaseCommand {
             validatePaths();
 
             System.out.println("Starting AF update process...");
+            System.out.println("Options: noPush=" + noPush + ", onlyFiles=" + onlyFiles);
 
-            // 1. Синхронизация COD репозитория (только pull)
+            // 1. Синхронизация COD репозитория
             if (codPathGit != null) {
-                if (!pullRepository("COD repository", codPathGit)) {
+                System.out.println("Syncing COD repository...");
+                if (!gitService.pullRepository(codPathGit)) {
                     System.err.println("WARNING: Failed to sync COD repository");
                 }
             }
@@ -50,20 +65,44 @@ public class CodUpdateAFCommand extends BaseCommand {
             // 3. Обновление миграций
             updateMigration();
 
-            // 4. Только синхронизация AF (без коммита)
+            // 4. Работа с AF репозиторием
             if (targetGitPath != null) {
-                if (!pullRepository("AF repository", targetGitPath)) {
+                // Синхронизируем перед коммитом
+                System.out.println("Syncing AF repository...");
+                if (!gitService.pullRepository(targetGitPath)) {
                     System.err.println("WARNING: Failed to sync AF repository");
+                }
+
+                // Проверяем есть ли изменения
+                boolean hasChanges = gitService.hasChanges(targetGitPath);
+
+                if (hasChanges) {
+                    if (noPush) {
+                        // Только коммит
+                        System.out.println("Committing changes to AF repository (no push)...");
+                        if (!gitService.commit(targetGitPath, "Automatic update from COD")) {
+                            throw new Exception("Failed to commit AF changes");
+                        }
+                    } else {
+                        // Коммит и пуш
+                        System.out.println("Committing and pushing changes to AF repository...");
+                        if (!gitService.commitAndPush(targetGitPath, "Automatic update from COD")) {
+                            throw new Exception("Failed to commit and push AF changes");
+                        }
+                    }
+                } else {
+                    System.out.println("No changes detected in AF repository");
                 }
             }
 
             // 5. Сохранение конфигурации
             saveConfig("codUpdateAF", createConfigMap());
 
-            System.out.println("AF update completed! Please review and commit changes manually.");
+            System.out.println("AF update completed successfully!");
             return 0;
         } catch (Exception e) {
             System.err.println("ERROR: " + e.getMessage());
+            e.printStackTrace();
             return 1;
         }
     }
@@ -91,22 +130,11 @@ public class CodUpdateAFCommand extends BaseCommand {
         }
     }
 
-    private void pullLatestChanges(String repoName, String repoPath) throws GitAPIException, IOException {
-        System.out.printf("Pulling latest changes from %s (%s)...%n", repoName, repoPath);
-        try (Git git = Git.open(Paths.get(repoPath).toFile())) {
-            try {
-                PullResult pullResult = git.pull().setRebase(true).call();
-                System.out.println("Pull result: " + pullResult);
-            }catch(Exception e){
-                System.out.println("Pull exception: " + e.getMessage());
-            }
-        }
-    }
-
     private void copyFilesWithReplace(String sourceName, String sourcePath,
                                       String destName, String destPath) throws IOException {
-        System.out.printf("Copying files from %s (%s) to %s (%s)...%n",
-                sourceName, sourcePath, destName, destPath);
+        System.out.printf("Copying files from %s (%s) to %s (%s) [mode: %s]...%n",
+                sourceName, sourcePath, destName, destPath,
+                onlyFiles ? "FILES ONLY" : "FULL DIRECTORY");
 
         Path sourceDir = Paths.get(sourcePath);
         Path targetDir = Paths.get(destPath);
@@ -115,37 +143,35 @@ public class CodUpdateAFCommand extends BaseCommand {
             Files.createDirectories(targetDir);
         }
 
-        copyDirectory(sourceDir, targetDir);
+        if (onlyFiles) {
+            copyOnlyFiles(sourceDir, targetDir);
+        } else {
+            copyDirectory(sourceDir, targetDir);
+        }
         System.out.println("All files copied successfully");
+    }
+
+    private void copyOnlyFiles(Path sourceDir, Path targetDir) throws IOException {
+        System.out.println("Copying only files (ignoring subdirectories)");
+
+        try (Stream<Path> stream = Files.list(sourceDir)) {
+            stream.filter(Files::isRegularFile)
+                    .forEach(source -> {
+                        try {
+                            Path target = targetDir.resolve(source.getFileName());
+                            Files.copy(source, target, StandardCopyOption.REPLACE_EXISTING);
+                            System.out.println("  Copied file: " + source.getFileName());
+                        } catch (IOException e) {
+                            System.err.println("  ERROR copying file: " + source.getFileName());
+                            System.err.println("    Reason: " + e.getMessage());
+                        }
+                    });
+        }
     }
 
     private void updateMigration() {
         // TODO: Implement migration logic later
         System.out.println("Migration update skipped (not implemented)");
-    }
-
-    private void commitChanges(String repoPath, String message) throws GitAPIException, IOException {
-        System.out.println("Preparing to commit changes to AF repository...");
-
-        try (Git git = Git.open(Paths.get(repoPath).toFile())) {
-            // Pull changes before commit
-            System.out.println("Pulling latest changes from AF repository...");
-            git.pull().setRebase(true).call();
-
-            // Add all changes
-            System.out.println("Adding files to commit...");
-            git.add().addFilepattern(".").call();
-
-            // Commit changes
-            System.out.println("Creating commit: " + message);
-            git.commit().setMessage(message).call();
-
-            // Push changes
-            System.out.println("Pushing changes to remote...");
-            git.push().call();
-
-            System.out.println("Changes successfully committed and pushed");
-        }
     }
 
     private Map<String, String> createConfigMap() {
