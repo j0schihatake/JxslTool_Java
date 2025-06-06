@@ -1,12 +1,7 @@
 package org.j0schi.cod.subcommand;
 
-import org.eclipse.jgit.api.Git;
-import org.eclipse.jgit.api.PullResult;
-import org.eclipse.jgit.api.Status;
-import org.eclipse.jgit.api.errors.GitAPIException;
 import org.j0schi.commands.BaseCommand;
 import org.j0schi.services.GitService;
-import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import java.io.IOException;
@@ -93,12 +88,13 @@ public class CodUpdateCommand extends BaseCommand {
             }
 
             // 6. Фиксация изменений в COD
+            String relativePath = gitService.getRelativeCodPath(codGitPath, codPath);
             if (!noPush) {
-                if (!gitService.commitAndPush(codGitPath, "Automatic update from AF")) {
+                if (!gitService.commitAndPush(relativePath, "Automatic update from AF")) {
                     throw new Exception("Failed to commit and push COD changes");
                 }
             } else {
-                if (!gitService.commit(codGitPath, "Automatic update from AF")) {
+                if (!gitService.commit(relativePath, "Automatic update from AF")) {
                     throw new Exception("Failed to commit COD changes");
                 }
                 System.out.println("Skipping push to remote (--no-push flag set)");
@@ -115,45 +111,6 @@ public class CodUpdateCommand extends BaseCommand {
         }
     }
 
-    private boolean checkForChanges(String repoPath) throws GitAPIException, IOException {
-        try (Git git = Git.open(Paths.get(repoPath).toFile())) {
-            Status status = git.status().call();
-            return !status.isClean();
-        }
-    }
-
-    private boolean commitChanges(String repoName, String repoPath, String commitMessage)
-            throws GitAPIException, IOException {
-        System.out.printf("Committing changes in %s (%s)...%n", repoName, repoPath);
-
-        try (Git git = Git.open(Paths.get(repoPath).toFile())) {
-            // Проверяем есть ли изменения
-            Status status = git.status().call();
-            if (status.isClean()) {
-                System.out.println("No changes to commit");
-                return true;
-            }
-
-            // Добавляем все изменения
-            git.add().addFilepattern(".").call();
-
-            // Создаем коммит
-            git.commit().setMessage(commitMessage).call();
-
-            System.out.println("Changes committed successfully");
-            return true;
-        }
-    }
-
-    private boolean pushChanges(String repoPath) throws GitAPIException, IOException {
-        System.out.println("Pushing changes to remote repository...");
-
-        try (Git git = Git.open(Paths.get(repoPath).toFile())) {
-            git.push().call();
-            System.out.println("Changes pushed successfully");
-            return true;
-        }
-    }
 
     // Остальные методы остаются без изменений
     private void applyConfig(Map<String, String> config) {
@@ -173,14 +130,6 @@ public class CodUpdateCommand extends BaseCommand {
 
         if (migrationFilePath != null) {
             validateFile("Migration file", migrationFilePath);
-        }
-    }
-
-    private void pullLatestChanges(String repoName, String repoPath) throws GitAPIException, IOException {
-        System.out.printf("Pulling latest changes from %s (%s)...%n", repoName, repoPath);
-        try (Git git = Git.open(Paths.get(repoPath).toFile())) {
-            PullResult pullResult = git.pull().setRebase(true).call();
-            System.out.println("Pull result: " + pullResult);
         }
     }
 

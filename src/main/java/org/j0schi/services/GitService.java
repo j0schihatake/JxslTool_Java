@@ -61,6 +61,10 @@ public class GitService {
     }
 
     public boolean commitAndPush(String repoPath, String commitMessage) {
+        return commitAndPush(repoPath, commitMessage, ".");
+    }
+
+    public boolean commitAndPush(String repoPath, String commitMessage, String pathToAdd) {
         try (Git git = openRepository(repoPath)) {
             if (git == null) return false;
 
@@ -71,7 +75,8 @@ public class GitService {
             }
 
             System.out.println("Committing changes: " + commitMessage);
-            git.add().addFilepattern(".").call();
+            // Добавляем ТОЛЬКО указанную директорию:
+            git.add().addFilepattern(pathToAdd).call();
             git.commit().setMessage(commitMessage).call();
 
             // Проверяем наличие удаленных репозиториев
@@ -256,5 +261,17 @@ public class GitService {
             handleGitError(repoPath, e);
             return false;
         }
+    }
+
+    /**
+     * Вычислить относительный путь:
+     * @param codGitPath
+     * @param codPath
+     * @return
+     */
+    public String getRelativeCodPath(String codGitPath, String codPath) {
+        Path repoPath = Paths.get(codGitPath);
+        Path targetPath = Paths.get(codPath);
+        return repoPath.relativize(targetPath).toString();
     }
 }

@@ -10,7 +10,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
-@Command(name = "updateAF", description = "Update AF files from COD")
+@Command(name = "updateaf", description = "Update AF files from COD")
 public class CodUpdateAFCommand extends BaseCommand {
 
     @Option(names = {"-tgp", "--target-git-path"}, required = true,
