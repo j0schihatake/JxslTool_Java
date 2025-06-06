@@ -23,19 +23,19 @@ import java.util.stream.Stream;
 @Command(name = "update", description = "Update COD files from AF")
 public class CodUpdateCommand extends BaseCommand {
 
-    @Option(names = "--target-git-path", required = true,
+    @Option(names = {"-tgp", "--target-git-path"}, required = true,
             description = "Path to AF Git repository")
     private String targetGitPath;
 
-    @Option(names = "--target-path", required = true,
+    @Option(names = {"-tp", "--target-path"}, required = true,
             description = "Path to AF files directory")
     private String targetPath;
 
-    @Option(names = "--cod-git-path", required = true,
+    @Option(names = {"-cgp","--cod-git-path"}, required = true,
             description = "Path to COD Git repository")
     private String codGitPath;
 
-    @Option(names = "--cod-path", required = true,
+    @Option(names = {"-cp","--cod-path"}, required = true,
             description = "Path to COD files directory")
     private String codPath;
 

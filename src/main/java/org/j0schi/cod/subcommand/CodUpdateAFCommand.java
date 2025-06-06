@@ -2,7 +2,6 @@ package org.j0schi.cod.subcommand;
 
 import org.j0schi.commands.BaseCommand;
 import org.j0schi.services.GitService;
-import picocli.CommandLine;
 import picocli.CommandLine.Command;
 import picocli.CommandLine.Option;
 import java.io.IOException;
@@ -14,16 +13,20 @@ import java.util.stream.Stream;
 @Command(name = "updateAF", description = "Update AF files from COD")
 public class CodUpdateAFCommand extends BaseCommand {
 
-    @Option(names = {"-tgp", "--targetGitPath"}, description = "Target Git repository path")
+    @Option(names = {"-tgp", "--targetGitPath"}, required = true,
+            description = "Target Git repository path")
     private String targetGitPath;
 
-    @Option(names = {"-tp", "--targetPath"}, description = "Target files directory path")
+    @Option(names = {"-tp", "--targetPath"}, required = true,
+            description = "Target files directory path")
     private String targetPath;
 
-    @Option(names = {"-cpg", "--codPathGit"}, description = "COD Git repository path")
+    @Option(names = {"-cpg", "--codPathGit"}, required = true,
+            description = "COD Git repository path")
     private String codPathGit;
 
-    @Option(names = {"-cp", "--codPath"}, description = "COD files directory path")
+    @Option(names = {"-cp", "--codPath"}, required = true,
+            description = "COD files directory path")
     private String codPath;
 
     // Новые опции
